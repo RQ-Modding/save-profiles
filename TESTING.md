@@ -1,6 +1,6 @@
-# Save Manager — agent notes
+# Testing Save Profiles
 
-Optional file, read only because this mod is installed. If `saves-open` is not in `rqmod-ctl ui`, the Save Manager is not there.
+For people and agents who test the mod in the game. Read it before you use anything the mod adds. If `saves-open` is not in `rqmod-ctl ui`, the Save Manager is not there.
 
 ## When the controls exist
 
