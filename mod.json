@@ -2,7 +2,7 @@
   "$schema": "https://rq-modding.github.io/rq-modding-docs/schemas/mod.schema.json",
   "id": "save-profiles",
   "name": "Save Profiles",
-  "author": "Magnum Mods",
+  "author": "Moru Zerinho6",
   "version": "1.0.0",
   "loader": "0.3.0",
   "priority": 0
