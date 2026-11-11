@@ -1,6 +1,6 @@
--- Save Profiles. The engine (rq.saves) does the file work: list, create,
--- clone, import from the vanilla game, rename, delete, switch (restarts the
--- game). This file owns the title-screen button and the manager window.
+-- Save Profiles. The engine (rq.saves) does the file work: list, create, clone, import from the
+-- vanilla game, rename, delete, switch (restarts the game). This file owns the title screen's
+-- button and the manager, drawn with rq.uikit in the hub's theme (1.1.0, loader 2.29.0).
 
 rq.log("Save Profiles: title-screen manager (file work lives in rq.saves)")
 
@@ -8,48 +8,26 @@ if not rq.saves.install() then
   error("save-profiles: rq.saves.install failed (see logs/rqmod.log)")
 end
 
-local VK_RETURN = 13
-local VK_ESCAPE = 27
+local ui = rq.uikit
 
-local ROW_H = 76
-local ROWS = 6
 local NAME_MAX = 40
+local PW, PH = 880, 600 -- the manager
+local QW, QH = 520, 192 -- the name prompt
+local LIST_W = 380
 
 local open = false
-local mode = "list" -- list | prompt | confirm
 local profiles = {}
 local vanilla = { exists = false }
 local current_mods = {}
 local selected = 1
-local scroll = 0
-local message = nil
-local message_bad = false
-local prompt = nil -- { kind, title, target, default }
-local confirm = nil -- { kind, title, lines, target }
-local prev_enter, prev_esc = false, false
-local agents_now, agents_prev = {}, {}
+local message, message_bad = nil, false
+local prompt = nil  -- { kind, title, line, target, value }
+local pending = nil -- { kind, id, name }: a question for the game's dialog, asked after drawing
 
-local function agent_rect(id, x, y, w, h, text)
-  agents_now[id] = true
-  rq.agent.control(id, { label = text, x = x, y = y, w = w, h = h })
-end
-
-local function agent_sweep()
-  for id in pairs(agents_prev) do
-    if not agents_now[id] then
-      rq.agent.control(id)
-    end
-  end
-  agents_prev, agents_now = agents_now, {}
-end
-
-local function frame(x, y, w, h, r, g, b, a)
-  a = a or 255
-  rq.hud.rect(x, y, w, 2, r, g, b, a)
-  rq.hud.rect(x, y + h - 2, w, 2, r, g, b, a)
-  rq.hud.rect(x, y, 2, h, r, g, b, a)
-  rq.hud.rect(x + w - 2, y, 2, h, r, g, b, a)
-end
+local GOLD = { r = 255, g = 230, b = 160 }
+local DIM = { r = 170, g = 170, b = 190 }
+local BAD = { r = 255, g = 130, b = 120 }
+local GOOD = { r = 150, g = 235, b = 160 }
 
 local function label(x, y, str, size, col)
   size = size or 16
@@ -58,12 +36,7 @@ local function label(x, y, str, size, col)
   rq.hud.text(x, y, str, { size = size, r = col.r, g = col.g, b = col.b })
 end
 
-local GOLD = { r = 255, g = 230, b = 160 }
-local DIM = { r = 170, g = 170, b = 190 }
-local BAD = { r = 255, g = 130, b = 120 }
-local GOOD = { r = 150, g = 235, b = 160 }
-
--- Cut a string so it fits max_px, adding "..." when it had to.
+-- Cut a string so it fits max_px at a size (or a style), adding "..." when it had to.
 local function fit(str, max_px, size)
   str = tostring(str or "")
   if rq.hud.text_width(str, size) <= max_px then
@@ -78,31 +51,6 @@ local function fit(str, max_px, size)
     str = str:sub(1, cut - 1)
   end
   return str .. "..."
-end
-
--- id: agent control id. enabled=false greys it and ignores clicks.
-local function button(id, x, y, w, h, text, enabled, accent)
-  if enabled == nil then
-    enabled = true
-  end
-  local hot = enabled and rq.hud.hit(x, y, w, h)
-  if not enabled then
-    rq.hud.rect(x, y, w, h, 28, 26, 32, 235)
-  elseif hot then
-    rq.hud.rect(x, y, w, h, 96, 74, 40, 245)
-  elseif accent then
-    rq.hud.rect(x, y, w, h, 60, 44, 24, 240)
-  else
-    rq.hud.rect(x, y, w, h, 36, 28, 18, 235)
-  end
-  frame(x, y, w, h, enabled and 220 or 90, enabled and 200 or 90, enabled and 140 or 100, 255)
-  local col = enabled and nil or DIM
-  local tw = rq.hud.text_width(text, 16)
-  label(x + math.floor((w - tw) / 2), y + math.floor((h - 16) / 2) - 1, text, 16, col)
-  if enabled then
-    agent_rect(id, x, y, w, h, text)
-  end
-  return enabled and rq.hud.clicked(x, y, w, h)
 end
 
 local function refresh()
@@ -135,31 +83,29 @@ local function select_active()
   selected = 1
 end
 
+local function active_name()
+  for _, p in ipairs(profiles) do
+    if p.active then
+      return p.name
+    end
+  end
+  return "?"
+end
+
 local function open_manager()
   open = true
-  mode = "list"
   message = nil
-  scroll = 0
   refresh()
   select_active()
 end
 
 local function close_manager()
   open = false
-  mode = "list"
-  prompt, confirm = nil, nil
-  rq.hud.text_end()
+  prompt, pending = nil, nil
 end
 
-local function begin_prompt(kind, title, target, default)
-  prompt = { kind = kind, title = title, target = target, default = default }
-  mode = "prompt"
-  rq.hud.text_begin(default or "", NAME_MAX)
-end
-
-local function begin_confirm(kind, title, lines, target)
-  confirm = { kind = kind, title = title, lines = lines, target = target }
-  mode = "confirm"
+local function begin_prompt(kind, title, line, target, default)
+  prompt = { kind = kind, title = title, line = line, target = target, value = default or "" }
 end
 
 local function summary_line(p, with_gold)
@@ -215,8 +161,9 @@ local function mod_diff(p)
   return missing, extra
 end
 
-local function do_prompt_ok(name)
-  local kind, target = prompt.kind, prompt.target
+local function prompt_ok()
+  local kind, target, name = prompt.kind, prompt.target, prompt.value
+  prompt = nil
   local ok, err
   if kind == "new" then
     ok, err = rq.saves.create(name)
@@ -227,9 +174,6 @@ local function do_prompt_ok(name)
   elseif kind == "import" then
     ok, err = rq.saves.import_vanilla(name)
   end
-  rq.hud.text_end()
-  prompt = nil
-  mode = "list"
   if not ok then
     say(err or "That did not work.", true)
     return
@@ -248,86 +192,54 @@ local function do_prompt_ok(name)
   end
 end
 
-local function do_confirm_ok()
-  local kind, target = confirm.kind, confirm.target
-  confirm = nil
-  mode = "list"
-  if kind == "delete" then
-    local ok, err = rq.saves.delete(target)
-    if not ok then
-      say(err or "Delete failed.", true)
-      return
+-- Play and Delete ask with the game's own dialog. It returns when the player picks, and every
+-- rq.on_frame callback (this file's too) runs while it shows, so it is asked after the drawing,
+-- with the theme put back.
+local function ask(a)
+  if a.kind == "switch" then
+    local yes = rq.ui.confirm("Play '" .. a.name .. "'?\nThe game restarts for a moment and opens this save.")
+    if yes then
+      say("Restarting the game...")
+      local ok, err = rq.saves.switch(a.id)
+      if not ok then
+        say(err or "Could not switch.", true)
+      end
     end
-    refresh()
-    say("Deleted.")
-  elseif kind == "switch" then
-    say("Restarting the game...")
-    local ok, err = rq.saves.switch(target)
-    if not ok then
-      say(err or "Could not switch.", true)
-    end
-  end
-end
-
-local function draw_list(px, py, pw, ph, enabled)
-  local lx, ly, lw = px + 16, py + 64, 392
-  local count = #profiles
-  if scroll > math.max(0, count - ROWS) then
-    scroll = math.max(0, count - ROWS)
-  end
-  for row = 1, ROWS do
-    local idx = scroll + row
-    local p = profiles[idx]
-    if not p then
-      break
-    end
-    local y = ly + (row - 1) * ROW_H
-    local hot = enabled and rq.hud.hit(lx, y, lw, ROW_H - 6)
-    if idx == selected then
-      rq.hud.rect(lx, y, lw, ROW_H - 6, 70, 54, 30, 245)
-    elseif hot then
-      rq.hud.rect(lx, y, lw, ROW_H - 6, 44, 38, 30, 240)
-    else
-      rq.hud.rect(lx, y, lw, ROW_H - 6, 28, 24, 36, 235)
-    end
-    frame(lx, y, lw, ROW_H - 6, idx == selected and 230 or 90, idx == selected and 205 or 84, idx == selected and 130 or 100, 255)
-    local tag = ""
-    if p.active then
-      tag = "ACTIVE"
-    end
-    local tagw = tag ~= "" and (rq.hud.text_width(tag, 13) + 16) or 0
-    label(lx + 12, y + 8, fit(p.name, lw - 28 - tagw, 19), 19, GOLD)
-    if tag ~= "" then
-      label(lx + lw - tagw - 4 + 8, y + 11, tag, 13, GOOD)
-    end
-    local sub = p.is_base and "Base save (cannot be deleted)" or (p.source or "")
-    label(lx + 12, y + 33, fit(sub, lw - 28, 13), 13, DIM)
-    label(lx + 12, y + 51, fit(summary_line(p), lw - 28, 13), 13, nil)
-    agent_rect("saves-row-" .. idx, lx, y, lw, ROW_H - 6, p.name)
-    if enabled and rq.hud.clicked(lx, y, lw, ROW_H - 6) then
-      selected = idx
-      message = nil
-    end
-  end
-  if count > ROWS then
-    local by = ly + ROWS * ROW_H - 2
-    if button("saves-scroll-up", lx, by, 190, 26, "Up", enabled and scroll > 0) then
-      scroll = scroll - 1
-    end
-    if button("saves-scroll-down", lx + 202, by, 190, 26, "Down", enabled and scroll < count - ROWS) then
-      scroll = scroll + 1
+  elseif a.kind == "delete" then
+    local yes = rq.ui.confirm("Delete '" .. a.name .. "'?\nEvery file of this save is removed. This cannot be undone.",
+      { cursor = "no" })
+    if yes then
+      local ok, err = rq.saves.delete(a.id)
+      if not ok then
+        say(err or "Delete failed.", true)
+        return
+      end
+      refresh()
+      say("Deleted.")
     end
   end
 end
 
-local function draw_detail(px, py, pw, ph, enabled)
-  local dx, dy, dw = px + 424, py + 64, pw - 440
+local function draw_list(x, y, h, modal)
+  local items = {}
+  for i, p in ipairs(profiles) do
+    items[i] = { text = p.name .. (p.active and "  (in use)" or ""), disabled = modal }
+  end
+  local index, changed = ui.list(items, selected, { x = x, y = y, w = LIST_W, h = h, row_h = 32, id = "saves" })
+  if changed and not modal then
+    selected = index
+    message = nil
+  end
+end
+
+-- dh: the column's height; the details take what the buttons and the note under them leave.
+local function draw_detail(dx, dy, dw, dh, modal)
   local p = profiles[selected]
   if not p then
     return
   end
-  rq.hud.rect(dx, dy, dw, 366, 22, 20, 32, 235)
-  frame(dx, dy, dw, 366, 90, 84, 100, 255)
+  local DH = dh - 108
+  ui.draw("block", dx, dy, dw, DH)
   label(dx + 14, dy + 10, fit(p.name, dw - 28, 20), 20, GOLD)
 
   local y = dy + 40
@@ -347,8 +259,9 @@ local function draw_detail(px, py, pw, ph, enabled)
     label(dx + 14, y, "Created: " .. p.created, 14, DIM)
     y = y + 20
   end
-  if p.source then
-    label(dx + 14, y, fit(p.source, dw - 28, 14), 14, DIM)
+  local source = p.is_base and "Base save (cannot be deleted)" or p.source
+  if source then
+    label(dx + 14, y, fit(source, dw - 28, 14), 14, DIM)
     y = y + 20
   end
 
@@ -388,172 +301,140 @@ local function draw_detail(px, py, pw, ph, enabled)
       parts[#parts + 1] = "Loaded now but not in this save: " .. table.concat(extra, ", ") .. "."
     end
     for _, line in ipairs(rq.hud.wrap(table.concat(parts, " "), dw - 28, 13)) do
-      if y < dy + 366 - 18 then
+      if y < dy + DH - 18 then
         label(dx + 14, y, line, 13, BAD)
         y = y + 16
       end
     end
   end
 
-  -- Actions
-  local by = dy + 378
+  -- The six buttons, two rows of three; greyed while the name prompt shows.
+  local by = dy + DH + 12
   local bw = math.floor((dw - 16) / 3)
-  local is_active = p.active
-  if button("saves-play", dx, by, bw, 34, is_active and "Playing" or "Play", enabled and not is_active, true) then
-    begin_confirm("switch", "Play '" .. p.name .. "'?", {
-      "The game restarts for a moment and",
-      "opens this save.",
-    }, p.id)
+  local function button(text, col, row, id, enabled)
+    return ui.button(text, { x = dx + (bw + 8) * col, y = by + 38 * row, w = bw, id = id,
+      disabled = modal or not enabled })
   end
-  if button("saves-clone", dx + bw + 8, by, bw, 34, "Clone", enabled) then
-    begin_prompt("clone", "Clone '" .. p.name .. "'", p.id, p.name .. " copy")
+  if button(p.active and "Playing" or "Play", 0, 0, "saves-play", not p.active) then
+    pending = { kind = "switch", id = p.id, name = p.name }
   end
-  if button("saves-rename", dx + (bw + 8) * 2, by, bw, 34, "Rename", enabled) then
-    begin_prompt("rename", "Rename '" .. p.name .. "'", p.id, p.is_base and "Original save" or p.name)
+  if button("Clone", 1, 0, "saves-clone", true) then
+    begin_prompt("clone", "Clone", "A name for the copy of '" .. p.name .. "'.", p.id, p.name .. " copy")
   end
-  local can_delete = enabled and not p.is_base and not p.active
-  if button("saves-delete", dx, by + 42, bw, 34, "Delete", can_delete) then
-    begin_confirm("delete", "Delete '" .. p.name .. "'?", {
-      "Every file of this save is removed.",
-      "This cannot be undone.",
-    }, p.id)
+  if button("Rename", 2, 0, "saves-rename", true) then
+    begin_prompt("rename", "Rename", "A new name for '" .. p.name .. "'.", p.id, p.is_base and "Original save" or p.name)
   end
-  if button("saves-new", dx + bw + 8, by + 42, bw, 34, "New empty", enabled) then
-    begin_prompt("new", "New empty save", nil, "New save")
+  if button("Delete", 0, 1, "saves-delete", not p.is_base and not p.active) then
+    pending = { kind = "delete", id = p.id, name = p.name }
   end
-  if button("saves-import", dx + (bw + 8) * 2, by + 42, bw, 34, "From vanilla", enabled and vanilla.exists) then
-    begin_prompt("import", "Import the vanilla save", nil, "Vanilla copy")
+  if button("New empty", 1, 1, "saves-new", true) then
+    begin_prompt("new", "New empty save", "A name for the new save. Its game starts from the beginning.", nil, "New save")
   end
+  if button("From vanilla", 2, 1, "saves-import", vanilla.exists) then
+    begin_prompt("import", "From vanilla", "A name for the copy of the original game's save.", nil, "Vanilla copy")
+  end
+  local note
   if p.is_base then
-    label(dx + 2, by + 82, "The base save cannot be deleted.", 13, DIM)
+    note = "The base save cannot be deleted."
   elseif p.active then
-    label(dx + 2, by + 82, "Switch to another save to delete this one.", 13, DIM)
+    note = "Switch to another save to delete this one."
   elseif not vanilla.exists then
-    label(dx + 2, by + 82, "No vanilla save was found in Documents.", 13, DIM)
+    note = "No vanilla save was found in Documents."
+  end
+  if note then
+    label(dx + 2, by + 80, note, 13, DIM)
   end
 end
 
-local function dialog_box(sw, sh, title, w, h)
-  rq.hud.rect(0, 0, sw, sh, 0, 0, 0, 120)
-  local x, y = math.floor((sw - w) / 2), math.floor((sh - h) / 2)
-  rq.hud.rect(x, y, w, h, 20, 18, 30, 252)
-  frame(x, y, w, h, 230, 205, 130, 255)
-  rq.hud.rect(x + 2, y + 2, w - 4, 36, 48, 36, 22, 255)
-  label(x + 14, y + 9, fit(title, w - 28, 18), 18, GOLD)
-  return x, y
+-- The name prompt: a small page of its own on the top layer, over the manager. Enter is OK, Esc,
+-- a right click and its close button are Cancel.
+local function draw_prompt(sw, sh)
+  local x, y = (sw - QW) // 2, (sh - QH) // 2
+  local act
+  ui.top(function()
+    -- The page's own dim lets the manager show through; the prompt reads better on a darker box.
+    rq.hud.rect(x, y, QW, QH, 0, 0, 0, 200)
+    local still = ui.page({ id = "saves-name", title = prompt.title, x = x, y = y, w = QW, h = QH }, function(cx, cy, cw)
+      label(cx, cy + 6, fit(prompt.line, cw, 15), 15, nil)
+      local value, _, ended = ui.input(prompt.value, { id = "saves-name", x = cx, y = cy + 30, w = cw,
+        max = NAME_MAX, focus = true, placeholder = "A name" })
+      prompt.value = value
+      local blank = not value:match("%S")
+      if ended == "enter" and not blank then act = "ok" end
+      if ended == "esc" then act = "cancel" end
+      label(cx, cy + 66, "Letters, digits and kana. Enter is OK, Esc cancels.", 13, DIM)
+      if ui.button("OK", { x = cx + cw - 248, y = cy + 92, w = 120, id = "saves-ok", disabled = blank }) then
+        act = act or "ok"
+      end
+      if ui.button("Cancel", { x = cx + cw - 120, y = cy + 92, w = 120, id = "saves-cancel" }) then
+        act = act or "cancel"
+      end
+    end)
+    if not still then act = act or "cancel" end
+  end)
+  return act
 end
 
-local function draw_prompt(sw, sh, enter, esc)
-  local w, h = 520, 190
-  local x, y = dialog_box(sw, sh, prompt.title, w, h)
-  local value = rq.hud.text_value()
-  rq.hud.rect(x + 16, y + 56, w - 32, 38, 8, 8, 14, 255)
-  frame(x + 16, y + 56, w - 32, 38, 150, 140, 100, 255)
-  local blink = (os.clock() * 2) % 2 < 1
-  label(x + 26, y + 66, value .. (blink and "|" or ""), 18, nil)
-  label(x + 16, y + 100, "Letters, digits and kana. Enter confirms, Esc cancels.", 12, DIM)
-  local ok_click = button("saves-ok", x + w - 244, y + h - 50, 110, 34, "OK", value:match("%S") ~= nil, true)
-  local cancel_click = button("saves-cancel", x + w - 126, y + h - 50, 110, 34, "Cancel", true)
-  if (ok_click or enter) and value:match("%S") then
-    do_prompt_ok(value)
-  elseif cancel_click or esc then
-    rq.hud.text_end()
-    prompt = nil
-    mode = "list"
+local function draw_manager(sw, sh)
+  local px, py = (sw - PW) // 2, (sh - PH) // 2
+  local modal = prompt ~= nil
+  local still = ui.page({ id = "saves", title = "Save Manager", x = px, y = py, w = PW, h = PH }, function(cx, cy, cw, ch)
+    -- The list starts at the title tab's bottom edge (the kit's page, 2.29.0), so the tab touches it.
+    draw_list(cx, cy, ch - 34, modal)
+    draw_detail(cx + LIST_W + 20, cy, cw - LIST_W - 20, ch - 34, modal)
+    if message then
+      label(cx, cy + ch - 22, fit(message, cw, 15), 15, message_bad and BAD or GOOD)
+    else
+      label(cx, cy + ch - 22, "Pick a save, then Play. Clone first to try mods on a copy.", 14, DIM)
+    end
+  end)
+  if prompt then
+    local act = draw_prompt(sw, sh)
+    -- A right click or the manager's close button while the prompt shows cancels the prompt only.
+    if not still then act = act or "cancel" end
+    if act == "ok" then
+      prompt_ok()
+    elseif act == "cancel" then
+      prompt = nil
+    end
+  elseif not still then
+    close_manager()
   end
 end
 
-local function draw_confirm(sw, sh, enter, esc)
-  local w, h = 480, 170
-  local x, y = dialog_box(sw, sh, confirm.title, w, h)
-  for i, line in ipairs(confirm.lines) do
-    label(x + 16, y + 50 + (i - 1) * 22, line, 16, nil)
+local function draw_title()
+  if ui.button("Save Manager", { x = 16, y = 16, w = 250, id = "saves-open" }) then
+    open_manager()
   end
-  local yes = confirm.kind == "delete" and "Delete" or "Play"
-  local ok_click = button("saves-confirm", x + w - 244, y + h - 50, 110, 34, yes, true, true)
-  local cancel_click = button("saves-cancel", x + w - 126, y + h - 50, 110, 34, "Cancel", true)
-  if ok_click or enter then
-    do_confirm_ok()
-  elseif cancel_click or esc then
-    confirm = nil
-    mode = "list"
+  label(20, 52, "Save: " .. fit(active_name(), 226, 13), 13, GOLD)
+end
+
+-- The kit's theme is shared by every mod: the hub's is used while this draws, then put back.
+local function themed(fn, ...)
+  local was = ui.theme
+  ui.use(ui.themes.hub)
+  local ok, err = pcall(fn, ...)
+  ui.use(was)
+  if not ok then
+    error(err, 0)
   end
 end
 
 rq.on_frame(function()
-  local enter = rq.input.key(VK_RETURN)
-  local esc = rq.input.key(VK_ESCAPE)
-  local enter_edge = enter and not prev_enter
-  local esc_edge = esc and not prev_esc
-  prev_enter, prev_esc = enter, esc
-
   if not rq.saves.title() then
     if open then
       close_manager()
     end
-    agent_sweep()
     return
-  end
-
-  local sw, sh = rq.hud.screen()
-  local active_name = "?"
-  for _, p in ipairs(profiles) do
-    if p.active then
-      active_name = p.name
-    end
   end
   if #profiles == 0 then
     refresh()
   end
-
-  if not open then
-    local bw, bh = 250, 40
-    local bx, by = 16, 16
-    local caption = "Save Manager"
-    if rq.hud.hit(bx, by, bw, bh) then
-      rq.hud.block_game_input()
-    end
-    if button("saves-open", bx, by, bw, bh, caption, true, true) then
-      open_manager()
-    end
-    local who = "Save: " .. fit(active_name, bw - 40, 13)
-    label(bx + 4, by + bh + 4, who, 13, GOLD)
-    agent_sweep()
-    return
+  local sw, sh = rq.hud.screen()
+  themed(open and draw_manager or draw_title, sw, sh)
+  if pending then
+    local a = pending
+    pending = nil
+    ask(a)
   end
-
-  rq.hud.block_game_input()
-  rq.hud.block_keys()
-  rq.hud.rect(0, 0, sw, sh, 0, 0, 0, 170)
-
-  local pw, ph = 880, 640
-  local px, py = math.floor((sw - pw) / 2), math.floor((sh - ph) / 2)
-  rq.hud.rect(px, py, pw, ph, 18, 16, 28, 248)
-  frame(px, py, pw, ph, 210, 190, 120, 255)
-  rq.hud.rect(px + 2, py + 2, pw - 4, 44, 48, 36, 22, 255)
-  label(px + 16, py + 12, "Save Manager", 22, GOLD)
-
-  local list_live = mode == "list"
-  if button("saves-close", px + pw - 126, py + 8, 110, 30, "Close", list_live) then
-    close_manager()
-    agent_sweep()
-    return
-  end
-  draw_list(px, py, pw, ph, list_live)
-  draw_detail(px, py, pw, ph, list_live)
-
-  if message then
-    label(px + 16, py + ph - 34, fit(message, pw - 32, 15), 15, message_bad and BAD or GOOD)
-  else
-    label(px + 16, py + ph - 34, "Pick a save, then Play. Clone first to try mods on a copy.", 14, DIM)
-  end
-
-  if mode == "list" and esc_edge then
-    close_manager()
-  elseif mode == "prompt" and prompt then
-    draw_prompt(sw, sh, enter_edge, esc_edge)
-  elseif mode == "confirm" and confirm then
-    draw_confirm(sw, sh, enter_edge, esc_edge)
-  end
-  agent_sweep()
 end)

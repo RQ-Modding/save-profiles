@@ -7,19 +7,21 @@ the original game.
 
 - A **Save Manager** button at the top left of the title screen opens a list of your saves. Each one
   shows its progress and the mods it was last played with.
-- **Play** switches to the selected save. The game restarts for a moment, because it reads its save
-  files at startup.
-- **Clone**, **Rename**, **New** and **Delete**. The base save cannot be deleted, and neither can the
-  one in use.
+- **Play** switches to the selected save, after the game's own Yes / No question. The game restarts
+  for a moment, because it reads its save files at startup.
+- **Clone**, **Rename**, **New empty** and **Delete**. The base save cannot be deleted, and neither
+  can the one in use. Delete asks with the game's question, with the cursor on No.
 - **From vanilla** copies the original game's save (`Documents\AliceSoft\Rance Quest\SaveData`) into
   a new save. The original is only ever read.
 
-Names take letters, digits and kana: the game's font cannot draw other characters. **Enter**
-confirms, **Esc** cancels.
+Names take letters, digits and kana: the game's font cannot draw other characters. The name field
+has a caret: **Left**, **Right**, **Home** and **End** move it, **Backspace** and **Delete** erase,
+**Ctrl+V** pastes. **Enter** is OK, **Esc** cancels.
 
 ## Keys and settings
 
-None beyond the window.
+The window looks and works like the game's own: the arrow keys and **Enter** move between its buttons
+and the list, and **Esc** or a right click closes it. No settings.
 
 ## Saves
 
@@ -45,13 +47,14 @@ the mod; the other saves stay in `Profiles` until you delete them.
 
 ## Install
 
-Needs [RQ MOD](https://github.com/RQ-Modding/RQ-Mod) with loader **0.3.0** or newer. Extract the
+Needs [RQ MOD](https://github.com/RQ-Modding/RQ-Mod) with loader **2.29.0** or newer. Extract the
 release zip into the game's `mods` folder, so that you have `mods/save-profiles/mod.json`.
 
 ## How it works
 
 The file work (list, create, clone, import, rename, delete, switch) is the engine's `rq.saves`. This
-mod owns the button and the window.
+mod owns the button and the window, drawn with the loader's UI kit (`rq.uikit`) in the look of the
+game's hub.
 
 ## License
 
