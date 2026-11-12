@@ -48,9 +48,28 @@ it is up. Only keep one game instance open, or the pipe may answer from the wron
 Do not test Delete or Play on the base save or on a save you did not make. Work on a clone, and
 delete only the saves you made.
 
+## Start Game and the vanilla save (1.2.0)
+
+`load` on the title (Start Game) asks a question when the save in use has no game
+(`自動セーブファイル_あり` false) and the vanilla save has at least one quest cleared. It is the game's
+dialog (`select` screen) with `select-yes-copy-it-and-play`, `select-no-start-a-new-game` and
+`dont-ask`, ticked from the start (row 12 in `g_sSelectData`; a press unticks it, row 11). Answered
+with it ticked, the question is turned off (`rq.ui`'s key `vanilla-start`, listed on Config's
+Confirmations page in the Mods tab).
+
+- **Yes** copies the vanilla save into a new save named "Vanilla copy" and switches to it: the
+  process exits and a new one starts, and the new title presses Start Game once by itself. Do not
+  press Yes unless you mean to make that copy and leave this save.
+- **No** lets Start Game go on: a new game starts in the save in use.
+
+`rq.mod.get("save-profiles")` returns, for tests, `would_ask()` (whether Start Game would ask now),
+`ask_key` and `press_start_once()` (the next title presses Start Game once, as after a switch).
+
 ## The Test Lab
 
 The Lab's `save-profiles` scenario runs on the title screen before a save loads: it opens the
 manager, clones, renames and makes saves with typed names, deletes them through the game's dialog
 (No, then Yes), and checks that the save in use and the saves it found are unchanged. It never
-presses Play's Yes.
+presses Play's Yes. Then, with the game's test for a game made false and Start Game taken back by
+the Lab, it answers the vanilla question No with "don't ask again" unticked, twice; and last it
+checks the press after a switch, which loads the Lab's save.

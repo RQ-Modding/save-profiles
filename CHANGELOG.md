@@ -3,6 +3,16 @@
 Each section is a version of the mod, the `version` in `mod.json`. The release workflow copies the
 section of a tagged version into the release notes.
 
+## 1.2.0
+
+Needs loader 2.44.0.
+
+- **Start Game** with no game in the save in use, while the original game's save is further along (a
+  quest cleared), asks whether to copy that save and play from it. Yes copies it, switches to the
+  copy and starts it by itself after the restart; No starts the new game.
+- The question's **Don't ask again** is ticked from the start. Left ticked, the question does not
+  come back; it is listed on Config's Mods tab, **Confirmations**, to turn it back on.
+
 ## 1.1.0
 
 Needs loader 2.29.0.

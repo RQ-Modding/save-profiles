@@ -3,7 +3,7 @@
   "id": "save-profiles",
   "name": "Save Profiles",
   "author": "Moru Zerinho6",
-  "version": "1.1.0",
-  "loader": "2.29.0",
+  "version": "1.2.0",
+  "loader": "2.44.0",
   "priority": 0
 }

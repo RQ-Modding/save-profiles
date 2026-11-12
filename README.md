@@ -13,6 +13,12 @@ the original game.
   can the one in use. Delete asks with the game's question, with the cursor on No.
 - **From vanilla** copies the original game's save (`Documents\AliceSoft\Rance Quest\SaveData`) into
   a new save. The original is only ever read.
+- **Start Game** with no game in the save in use, while the original game's save is further along
+  (at least one quest cleared), asks with the game's own question whether to copy that save and play
+  from it. **Yes** makes the copy (named "Vanilla copy"), switches to it and starts it. **No** starts
+  the new game. **Don't ask again** is ticked from the start: answered with it ticked, the question
+  does not come back and Start Game starts the new game. Turn it back on in **Config → Mods →
+  Confirmations**. Once the save in use has a game, Start Game never asks.
 
 Names take letters, digits and kana: the game's font cannot draw other characters. The name field
 has a caret: **Left**, **Right**, **Home** and **End** move it, **Backspace** and **Delete** erase,
@@ -41,13 +47,16 @@ the mod; the other saves stay in `Profiles` until you delete them.
 
 ## Your first run
 
+Press **Start Game**: if your original game's save is further along, the game asks whether to copy it
+and play from it. Or by hand:
+
 1. Open **Save Manager** on the title screen.
 2. **From vanilla** copies the original game's save into a new save.
 3. Select it and press **Play**.
 
 ## Install
 
-Needs [RQ MOD](https://github.com/RQ-Modding/RQ-Mod) with loader **2.29.0** or newer. Extract the
+Needs [RQ MOD](https://github.com/RQ-Modding/RQ-Mod) with loader **2.44.0** or newer. Extract the
 release zip into the game's `mods` folder, so that you have `mods/save-profiles/mod.json`.
 
 ## How it works

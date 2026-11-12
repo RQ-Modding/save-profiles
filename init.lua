@@ -1,6 +1,12 @@
 -- Save Profiles. The engine (rq.saves) does the file work: list, create, clone, import from the
 -- vanilla game, rename, delete, switch (restarts the game). This file owns the title screen's
 -- button and the manager, drawn with rq.uikit in the hub's theme (1.1.0, loader 2.29.0).
+--
+-- 1.2.0 (loader 2.44.0): Start Game while the save in use has no game yet, and the original game's
+-- save is past the start (a quest cleared), asks with the game's own dialog whether to copy that
+-- save and play from it. Its "don't ask again" row starts ticked (rq.ui.ask's remember_checked);
+-- turned off, Start Game starts the new game. Yes copies (rq.saves.import_vanilla), switches to the
+-- copy (the game restarts) and presses Start Game once on the next title.
 
 rq.log("Save Profiles: title-screen manager (file work lives in rq.saves)")
 
@@ -420,6 +426,85 @@ local function themed(fn, ...)
   end
 end
 
+-- ---- Start Game with no save here, and the vanilla save further along (1.2.0) ----
+
+local ASK_KEY = "vanilla-start"
+local START_ONCE = "start-once" -- written before the restart: the next title presses Start Game
+local COPY_NAME = "Vanilla copy"
+
+-- The game's own test before it starts a new game (タイトル_ロード).
+local function no_game_here()
+  local ok, has = pcall(rq.ain.call, "自動セーブファイル_あり")
+  return ok and has == false
+end
+
+-- The vanilla save, when it is past the start: at least one quest cleared.
+local function vanilla_ahead()
+  local v = rq.saves.vanilla()
+  local s = v and v.exists and v.summary
+  if not s or not s.has_save or (tonumber(s.quests) or 0) < 1 then return nil end
+  return s
+end
+
+local function vanilla_text(s)
+  local bits = {}
+  if s.world then bits[#bits + 1] = "World " .. s.world end
+  if s.fame_rank then bits[#bits + 1] = "rank " .. s.fame_rank end
+  bits[#bits + 1] = s.quests .. (s.quests == 1 and " quest" or " quests") .. " cleared"
+  return "The original game has a save further along:\n" .. table.concat(bits, ", ") .. ".\n"
+    .. "Copy it here and play from it?"
+end
+
+local function copy_and_play()
+  local id, err = rq.saves.import_vanilla(COPY_NAME)
+  if not id then
+    rq.ui.notice("The copy did not work: " .. tostring(err or "?") .. "\nA new game starts.")
+    return
+  end
+  rq.log("Save Profiles: copied the vanilla save to '" .. tostring(id) .. "', switching to it")
+  rq.store.global.set(START_ONCE, true)
+  local _, err2 = rq.saves.switch(id) -- the game restarts; past it only when the switch failed
+  rq.store.global.delete(START_ONCE)
+  rq.ui.notice("The copy is made, but the game could not switch to it: " .. tostring(err2 or "?")
+    .. "\nIt is in the Save Manager. A new game starts.")
+end
+
+local function ask_vanilla()
+  local s = vanilla_ahead()
+  if not s then return end
+  local ok, pick = pcall(rq.ui.ask, vanilla_text(s), {
+    { id = "yes", text = "Yes, copy it and play" },
+    { id = "no", text = "No, start a new game" },
+  }, { cursor = "yes", remember = ASK_KEY, remember_label = "Copy a vanilla save further along at Start Game",
+       remember_answer = "no", remember_checked = true })
+  if not ok then
+    rq.log("Save Profiles: the vanilla question: " .. tostring(pick))
+    return
+  end
+  if pick == "yes" then copy_and_play() end
+end
+
+-- After a switch from the question, the title presses Start Game once by itself. The flag is read
+-- and cleared at load, so a failed start never repeats.
+local start_once = rq.store.global.get(START_ONCE, false) == true
+if start_once then rq.store.global.delete(START_ONCE) end
+
+-- T_Title::checkSelect waits for the player's choice (the title's updates run inside it) and
+-- returns the button: 1 is Start Game. Pressed once by itself: the wait is skipped with 1.
+rq.ain.hook("T_Title@checkSelect", {
+  before = function(h)
+    if start_once and not open then
+      start_once = false
+      rq.log("Save Profiles: Start Game, once, after the switch")
+      h.skip, h.result = true, 1
+    end
+  end,
+  after = function(h)
+    if h.result ~= 1 or open then return end
+    if no_game_here() then ask_vanilla() end
+  end,
+})
+
 rq.on_frame(function()
   if not rq.saves.title() then
     if open then
@@ -438,3 +523,11 @@ rq.on_frame(function()
     ask(a)
   end
 end)
+
+-- For tests: whether Start Game would ask now, the question's key, and the press of Start Game the
+-- next title makes after a switch.
+return {
+  would_ask = function() return no_game_here() and vanilla_ahead() ~= nil end,
+  ask_key = ASK_KEY,
+  press_start_once = function() start_once = true end,
+}
