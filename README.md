@@ -3,6 +3,16 @@
 A **Save Manager** on the title screen: keep several saves side by side, and bring in your save from
 the original game.
 
+## Showcase
+
+### Title Menu Button
+
+<img width="1270" height="336" alt="image" src="https://github.com/user-attachments/assets/4b5927de-26f1-4884-9f7c-17ebdaa2852d" />
+
+### Save Manager Menu
+
+<img width="1270" height="951" alt="image" src="https://github.com/user-attachments/assets/d7443a52-58ff-483f-86cb-d4a5257f4971" />
+
 ## What it changes
 
 - A **Save Manager** button at the top left of the title screen opens a list of your saves. Each one
