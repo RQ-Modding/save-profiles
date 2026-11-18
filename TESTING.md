@@ -65,7 +65,7 @@ Confirmations page in the Mods tab).
 `rq.mod.get("save-profiles")` returns, for tests, `would_ask()` (whether Start Game would ask now),
 `ask_key` and `press_start_once()` (the next title presses Start Game once, as after a switch).
 
-## The Test Lab
+## Tested in the game
 
 The Lab's `save-profiles` scenario runs on the title screen before a save loads: it opens the
 manager, clones, renames and makes saves with typed names, deletes them through the game's dialog
