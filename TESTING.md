@@ -65,11 +65,31 @@ Confirmations page in the Mods tab).
 `rq.mod.get("save-profiles")` returns, for tests, `would_ask()` (whether Start Game would ask now),
 `ask_key` and `press_start_once()` (the next title presses Start Game once, as after a switch).
 
+## The face screen (1.3.0)
+
+The custom character creator's face screen (`T_SelectFace`) gets a box over the game's text at the bottom left, with the `Face CG` folder of the save
+in use, and the button `button-saves-faces-open` (a kit button at 512, 722, between the box and
+NEXT) while it shows. The button opens that folder in Windows' file window: do not press it in an
+unattended run, as the window opens on the desktop. Its tip gives the whole path.
+
+An agent can open the screen without the creator:
+`rq.ain.method({ "g_sSelectFace" }, "T_SelectFace@create", "")`, and close it with
+`T_SelectFace@delete`. As it opens, with the setting `copy_faces` on (the default), the pictures of
+the original game's `Face CG` folder that the save's folder lacks are copied in (`rq.saves.faces`'s
+`missing`); the box's last line says how many. Where the original folder does not exist, nothing is
+copied.
+
+`face_screen()` returns `{ info, copied, err }` while the screen shows (`info` is `rq.saves.faces()`
+as it opened) and nil otherwise; `face_box` is the box's inside on the screen.
+
 ## Tested in the game
 
 The Lab's `save-profiles` scenario runs on the title screen before a save loads: it opens the
 manager, clones, renames and makes saves with typed names, deletes them through the game's dialog
 (No, then Yes), and checks that the save in use and the saves it found are unchanged. It never
 presses Play's Yes. Then, with the game's test for a game made false and Start Game taken back by
-the Lab, it answers the vanilla question No with "don't ask again" unticked, twice; and last it
-checks the press after a switch, which loads the Lab's save.
+the Lab, it answers the vanilla question No with "don't ask again" unticked, twice; then it
+checks the press after a switch, which loads the Lab's save. Last, from the hub, it opens the face
+screen and checks the box's folder, its button, the copy of the original game's faces where that
+folder exists, and `rq.saves.faces`, `import_faces` and `open_folder`'s refusal; it never presses
+Open folder.

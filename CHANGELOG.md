@@ -3,6 +3,18 @@
 Each section is a version of the mod, the `version` in `mod.json`. The release workflow copies the
 section of a tagged version into the release notes.
 
+## 1.3.0
+
+Needs loader 2.65.0.
+
+- The custom characters' face screen named the original game's folder
+  (`<My Documents>\AliceSoft\Rance Quest\SaveData`), while the game reads the faces from the
+  `Face CG` folder of the save in use. Its box now shows that folder, and an **Open folder** button
+  beside **NEXT** opens it; its tip gives the whole path.
+- As the face screen opens, the pictures in the original game's `Face CG` folder that the save in
+  use lacks (by file name) are copied in, and the box says how many. Nothing is overwritten, and the
+  original folder is only read. A setting in **Config → Mods → Save Profiles** turns it off.
+
 ## 1.2.0
 
 Needs loader 2.44.0.

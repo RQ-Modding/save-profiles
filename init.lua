@@ -7,6 +7,11 @@
 -- save and play from it. Its "don't ask again" row starts ticked (rq.ui.ask's remember_checked);
 -- turned off, Start Game starts the new game. Yes copies (rq.saves.import_vanilla), switches to the
 -- copy (the game restarts) and presses Start Game once on the next title.
+--
+-- 1.3.0 (loader 2.65.0): the character creator's face screen names the vanilla game's folder in
+-- Documents (it is drawn in the screen's picture), while the game reads the faces from the save in
+-- use. Its box shows that folder instead, with a button that opens it, and the vanilla game's faces
+-- the save lacks are copied in as the screen opens (a setting, on by default).
 
 rq.log("Save Profiles: title-screen manager (file work lives in rq.saves)")
 
@@ -505,7 +510,107 @@ rq.ain.hook("T_Title@checkSelect", {
   end,
 })
 
+-- ---- The character creator's face screen (1.3.0, loader 2.65.0) ----
+-- T_SelectFace::create puts the screen's picture (CG 12302) at y 382 and lists the Face CG folder of
+-- the save in use. The picture's box at the bottom left tells the player to look in
+-- "<My Documents>\AliceSoft\Rance Quest\SaveData", which is not where the game reads under RQ MOD.
+-- The box is painted over in its own grey with the folder the game reads, and a button between it
+-- and NEXT opens that folder.
+
+local FACE_BOX = { x = 5, y = 715, w = 495, h = 44 } -- the box's inside, on the 1024 by 768 screen
+local FACE_GREY = 66                                 -- its grey in the picture (the border is 112)
+local FACE_OPEN = { x = 512, y = 722, w = 132, h = 36 }
+
+local settings = rq.config.settings{
+  id = "save-profiles",
+  title = "Save Profiles",
+  rows = {
+    { kind = "checkbox", key = "copy_faces", label = "Copy the original game's faces into the save in use",
+      default = true },
+    { kind = "label", dim = true, size = 15,
+      text = "As the character creator's face screen opens: the pictures in the original game's" },
+    { kind = "label", dim = true, size = 15,
+      text = "Face CG folder that this save's folder has no file of that name for. None is overwritten." },
+  },
+}
+
+local face = nil         -- while the face screen shows: { info, copied, err }
+local face_next = nil    -- what the copy before the screen's create did
+
+-- Cut a string's start so it fits max_px, with "..." in front when it had to (for a path's end).
+local function fit_left(str, max_px, size)
+  str = tostring(str or "")
+  if rq.hud.text_width(str, size) <= max_px then
+    return str
+  end
+  while #str > 1 and rq.hud.text_width("..." .. str, size) > max_px do
+    local cut = 2 -- drop one UTF-8 character
+    while cut <= #str and (str:byte(cut) & 0xC0) == 0x80 do
+      cut = cut + 1
+    end
+    str = str:sub(cut)
+  end
+  return "..." .. str
+end
+
+-- Before the game lists the folder, so the copies show at once.
+rq.ain.hook("T_SelectFace@create", {
+  before = function()
+    face_next = {}
+    if settings.get("copy_faces") then
+      local f = rq.saves.faces()
+      if f and f.missing > 0 then
+        face_next.copied, face_next.err = rq.saves.import_faces()
+      end
+    end
+  end,
+  after = function(h)
+    -- false when the folder has no face: the game says "Prepare a face CG." and shows nothing.
+    if h.result == true or h.result == 1 then
+      face = face_next or {}
+      face.info = rq.saves.faces() or {}
+    end
+    face_next = nil
+  end,
+})
+rq.ain.hook("T_SelectFace@delete", {
+  before = function() face = nil end,
+})
+
+local function draw_faces()
+  local b = FACE_BOX
+  local info = face.info
+  local x, w = b.x + 4, b.w - 8
+  rq.hud.rect(b.x, b.y, b.w, b.h, FACE_GREY, FACE_GREY, FACE_GREY, 255)
+  local name = active_name()
+  local head = name ~= "?" and ("Face CGs of the save '" .. name .. "' (PNG or BMP, 196 x 232):")
+    or "Face CGs of this save (PNG or BMP, 196 x 232):"
+  label(x, b.y + 1, fit(head, w, 13), 13, nil)
+  label(x, b.y + 15, fit_left(info.path or "?", w, 13), 13, GOLD)
+  local note, col
+  if face.err then
+    note, col = "Copying the original game's faces: " .. face.err, BAD
+  elseif face.copied and face.copied > 0 then
+    note = "Copied " .. face.copied .. (face.copied == 1 and " face" or " faces") .. " from the original game."
+    col = GOOD
+  else
+    note, col = "Pictures added now show the next time this screen opens.", DIM
+  end
+  label(x, b.y + 29, fit(note, w, 13), 13, col)
+  local o = FACE_OPEN
+  if ui.button("Open folder", { x = o.x, y = o.y, w = o.w, h = o.h, id = "saves-faces-open",
+      tip = { header = "Face CG folder", text = info.path or "?" } }) then
+    local ok, err = rq.saves.open_folder("faces")
+    if not ok then
+      face.err = err or "?"
+    end
+  end
+end
+
 rq.on_frame(function()
+  if face then
+    themed(draw_faces)
+  end
   if not rq.saves.title() then
     if open then
       close_manager()
@@ -524,10 +629,12 @@ rq.on_frame(function()
   end
 end)
 
--- For tests: whether Start Game would ask now, the question's key, and the press of Start Game the
--- next title makes after a switch.
+-- For tests: whether Start Game would ask now, the question's key, the press of Start Game the
+-- next title makes after a switch, and the face screen's box while it shows (1.3.0).
 return {
   would_ask = function() return no_game_here() and vanilla_ahead() ~= nil end,
   ask_key = ASK_KEY,
   press_start_once = function() start_once = true end,
+  face_screen = function() return face end,
+  face_box = FACE_BOX,
 }

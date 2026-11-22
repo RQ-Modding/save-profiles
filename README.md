@@ -29,6 +29,15 @@ the original game.
   the new game. **Don't ask again** is ticked from the start: answered with it ticked, the question
   does not come back and Start Game starts the new game. Turn it back on in **Config → Mods →
   Confirmations**. Once the save in use has a game, Start Game never asks.
+- **Faces for custom characters.** The game reads them from the `Face CG` folder of the save in use,
+  but its face screen tells you to look in `Documents\AliceSoft\Rance Quest\SaveData`, which is the
+  original game's. The mod writes the real folder in that box and adds an **Open folder** button
+  beside **NEXT**; hold the mouse on the button to see the whole path. Each save has its own
+  `Face CG` folder. Pictures you add while the screen is open show the next time it opens.
+- As the face screen opens, the pictures in the original game's `Face CG` folder that the save in
+  use does not have yet (by file name) are copied into it, so faces you made for the original game
+  are there too. Nothing is overwritten or removed, and the original folder is only read. Turn it
+  off in **Config → Mods → Save Profiles**.
 
 Names take letters, digits and kana: the game's font cannot draw other characters. The name field
 has a caret: **Left**, **Right**, **Home** and **End** move it, **Backspace** and **Delete** erase,
@@ -37,7 +46,10 @@ has a caret: **Left**, **Right**, **Home** and **End** move it, **Backspace** an
 ## Keys and settings
 
 The window looks and works like the game's own: the arrow keys and **Enter** move between its buttons
-and the list, and **Esc** or a right click closes it. No settings.
+and the list, and **Esc** or a right click closes it.
+
+**Config → Mods → Save Profiles** has one setting: **Copy the original game's faces into the save in
+use** (on).
 
 ## Saves
 
@@ -66,14 +78,14 @@ and play from it. Or by hand:
 
 ## Install
 
-Needs [RQ MOD](https://github.com/RQ-Modding/RQ-Mod) with loader **2.44.0** or newer. Extract the
+Needs [RQ MOD](https://github.com/RQ-Modding/RQ-Mod) with loader **2.65.0** or newer. Extract the
 release zip into the game's `mods` folder, so that you have `mods/save-profiles/mod.json`.
 
 ## How it works
 
-The file work (list, create, clone, import, rename, delete, switch) is the engine's `rq.saves`. This
-mod owns the button and the window, drawn with the loader's UI kit (`rq.uikit`) in the look of the
-game's hub.
+The file work (list, create, clone, import, rename, delete, switch, the faces' folders, their copy
+and opening a folder) is the engine's `rq.saves`. This mod owns the button, the window and the face
+screen's box, drawn with the loader's UI kit (`rq.uikit`) in the look of the game's hub.
 
 ## License
 
